@@ -1,4 +1,4 @@
-# Copyright 2020 Google LLC
+# Copyright 2021 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-timeout: 3600s
+timeout: 7200s
 options:
   machineType: 'N1_HIGHCPU_32'
   diskSizeGb: '512'
@@ -25,9 +25,7 @@ steps:
         # Using a substitution here allows us to call this script from
         # the top-level directory, as Cloud Build does.
         "--context=${_CONTEXT}",
-        "--cache-repo=gcr.io/${PROJECT_ID}/cpp-samples/ci/cache",
-        "--destination=gcr.io/${PROJECT_ID}/cpp-samples/populate-bucket:${SHORT_SHA}",
-        "--cache=true",
-        "--cache-ttl=48h"
+        "--cache-repo=gcr.io/${PROJECT_ID}/getting-started-cpp/ci/cache",
+        "--destination=gcr.io/${PROJECT_ID}/getting-started-cpp/gke",
+        "--cache=true"
     ]
-    timeout: 3600s

@@ -1,4 +1,4 @@
-# Copyright 2020 Google LLC
+# Copyright 2021 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,12 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# [START cloudrun_helloworld_dockerfile]
-# [START dockerfile]
-# We chose Alpine to build the image because it has good support for creating
-# statically-linked, small programs.
-ARG DISTRO_VERSION=3.13
-FROM alpine:${DISTRO_VERSION} AS base
+FROM ubuntu:20.04 AS base
 
 # Create separate targets for each phase, this allows us to cache intermediate
 # stages when using Google Cloud Build, and makes the final deployment stage
@@ -27,49 +22,52 @@ FROM base AS devtools
 # Install the typical development tools and some additions:
 #   - ninja-build is a backend for CMake that often compiles faster than
 #     CMake with GNU Make.
-#   - Install the boost libraries.
-RUN apk update && \
-    apk add \
-        boost-dev \
-        boost-static \
-        build-base \
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt update && \
+    apt install -y \
+        build-essential \
         cmake \
-        git \
+        curl \
         gcc \
         g++ \
-        libc-dev \
-        nghttp2-static \
-        ninja \
-        openssl-dev \
-        openssl-libs-static \
+        git \
+        ninja-build \
+        pkg-config \
         tar \
-        zlib-static
+        unzip \
+        zip
 
 # Copy the source code to /v/source and compile it.
 FROM devtools AS build
-COPY . /v/source
-WORKDIR /v/source
 
-# Run the CMake configuration step, setting the options to create
-# a statically linked C++ program
+WORKDIR /v
+RUN git clone https://github.com/microsoft/vcpkg.git \
+    && /v/vcpkg/bootstrap-vcpkg.sh -disableMetrics
+
+WORKDIR /v/vcpkg
+COPY vcpkg.json /v/deps/
+RUN /v/vcpkg/vcpkg install --x-manifest-root=/v/deps  --clean-after-build
+
+# Run the CMake configuration step.
+COPY . /v/source
 RUN cmake -S/v/source -B/v/binary -GNinja \
     -DCMAKE_BUILD_TYPE=Release \
-    -DBoost_USE_STATIC_LIBS=ON \
-    -DCMAKE_EXE_LINKER_FLAGS=-static
+    -DCMAKE_TOOLCHAIN_FILE=/v/vcpkg/scripts/buildsystems/vcpkg.cmake \
+    && cmake --build /v/binary --target gke_index_gcs \
+    && strip /v/binary/gke_index_gcs
 
-# Compile the binary and strip it to reduce its size.
-RUN cmake --build /v/binary
-RUN strip /v/binary/cloud_run_hello
+# Create the final deployment image, install the minimal dependencies for the
+# program.
+FROM base AS getting-started-gke
 
-# Create the final deployment image, using `scratch` (the empty Docker image)
-# as the starting point. Effectively we create an image that only contains
-# our program.
-FROM scratch AS cloud-run-hello
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt update && \
+    apt-get --no-install-recommends install -y libstdc++6 ca-certificates && \
+    rm -rf /var/cache/apt/*
+
 WORKDIR /r
 
 # Copy the program from the previously created stage and make it the entry point.
-COPY --from=build /v/binary/cloud_run_hello /r
+COPY --from=build /v/binary/gke_index_gcs /r
 
-ENTRYPOINT [ "/r/cloud_run_hello" ]
-# [END dockerfile]
-# [END cloudrun_helloworld_dockerfile]
+ENTRYPOINT [ "/r/gke_index_gcs" ]
