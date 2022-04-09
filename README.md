@@ -1,5 +1,5 @@
 # C++ Samples
-
+c &amp; c++ language samples code
 A small collection of samples that demonstrate how to call Google Cloud services from C++.
 
 [![style][style-badge]][style-link] [![cloud build][cloud-build-badge]][cloud-build-link]
